@@ -51,6 +51,12 @@ public class QuoteCalculator {
     }
 
     private void validatePet(Pet pet) {
+        if (pet.name() == null || pet.name().isBlank()) {
+            throw new DomainException("Pet name is required.");
+        }
+        if (pet.age() < 0) {
+            throw new DomainException("Age cannot be negative.");
+        }
         if (pet.age() > MAX_AGE) {
             throw new DomainException("Pets older than " + MAX_AGE + " years cannot be insured.");
         }
