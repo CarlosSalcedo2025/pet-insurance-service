@@ -4,7 +4,6 @@ import org.prueba.petinsuranceservice.domain.exception.DomainException;
 import org.prueba.petinsuranceservice.domain.model.Pet;
 import org.prueba.petinsuranceservice.domain.model.Plan;
 import org.prueba.petinsuranceservice.domain.model.Quote;
-import org.prueba.petinsuranceservice.domain.model.Species;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -26,11 +25,10 @@ public class QuoteCalculator {
         BigDecimal amount = BASE_PRICE;
 
         // Species increase
-        if (pet.species() == Species.DOG) {
-            amount = amount.multiply(DOG_INCREASE);
-        } else if (pet.species() == Species.CAT) {
-            amount = amount.multiply(CAT_INCREASE);
-        }
+        amount = amount.multiply(switch (pet.species()) {
+            case DOG -> DOG_INCREASE;
+            case CAT -> CAT_INCREASE;
+        });
 
         // Age increase
         if (pet.age() > AGE_THRESHOLD) {
