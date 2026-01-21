@@ -27,6 +27,8 @@ public class IssuePolicyInteractor implements IssuePolicyUseCase {
         return quoteRepository.findById(quoteId)
                 .switchIfEmpty(Mono.error(new DomainException("Quote not found with ID: " + quoteId)))
                 .flatMap(quote -> {
+                    validateOwnerData(ownerName, ownerId, ownerEmail);
+
                     if (quote.expirationDate().isBefore(LocalDateTime.now())) {
                         return Mono.error(new DomainException("Quote has expired. Please generate a new one."));
                     }
@@ -43,5 +45,17 @@ public class IssuePolicyInteractor implements IssuePolicyUseCase {
 
                     return policyRepository.save(policy);
                 });
+    }
+
+    private void validateOwnerData(String name, String id, String email) {
+        if (name == null || name.isBlank()) {
+            throw new DomainException("Owner name is required.");
+        }
+        if (id == null || id.isBlank()) {
+            throw new DomainException("Owner ID is required.");
+        }
+        if (email == null || email.isBlank() || !email.contains("@")) {
+            throw new DomainException("A valid owner email is required.");
+        }
     }
 }

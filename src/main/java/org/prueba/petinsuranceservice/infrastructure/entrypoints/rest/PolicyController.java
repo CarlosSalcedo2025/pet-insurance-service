@@ -1,5 +1,6 @@
 package org.prueba.petinsuranceservice.infrastructure.entrypoints.rest;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.prueba.petinsuranceservice.domain.model.Policy;
 import org.prueba.petinsuranceservice.domain.port.in.IssuePolicyUseCase;
@@ -17,7 +18,8 @@ public class PolicyController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<Policy> issuePolicy(@RequestBody IssuePolicyRequest request) {
+    public Mono<Policy> issuePolicy(@Valid @RequestBody IssuePolicyRequest request) {
+
         return issuePolicyUseCase.execute(
                 request.quoteId(),
                 request.ownerName(),
