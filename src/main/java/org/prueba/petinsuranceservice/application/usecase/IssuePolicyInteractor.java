@@ -4,7 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.prueba.petinsuranceservice.domain.exception.DomainException;
 import org.prueba.petinsuranceservice.domain.model.Policy;
 import org.prueba.petinsuranceservice.domain.model.PolicyStatus;
+import org.prueba.petinsuranceservice.domain.model.event.PolicyIssuedEvent;
 import org.prueba.petinsuranceservice.domain.port.in.IssuePolicyUseCase;
+import org.prueba.petinsuranceservice.domain.port.out.DomainEventPublisher;
 import org.prueba.petinsuranceservice.domain.port.out.PolicyRepository;
 import org.prueba.petinsuranceservice.domain.port.out.QuoteRepository;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ public class IssuePolicyInteractor implements IssuePolicyUseCase {
 
     private final QuoteRepository quoteRepository;
     private final PolicyRepository policyRepository;
+    private final DomainEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -43,7 +46,19 @@ public class IssuePolicyInteractor implements IssuePolicyUseCase {
                             .issueDate(LocalDateTime.now())
                             .build();
 
-                    return policyRepository.save(policy);
+                    return policyRepository.save(policy)
+                            .flatMap(savedPolicy -> {
+                                PolicyIssuedEvent event = PolicyIssuedEvent.builder()
+                                        .policyId(savedPolicy.id())
+                                        .quoteId(quoteId)
+                                        .amount(quote.amount())
+                                        .ownerEmail(ownerEmail)
+                                        .occurredAt(LocalDateTime.now())
+                                        .build();
+
+                                return eventPublisher.publishPolicyIssued(event)
+                                        .thenReturn(savedPolicy);
+                            });
                 });
     }
 
