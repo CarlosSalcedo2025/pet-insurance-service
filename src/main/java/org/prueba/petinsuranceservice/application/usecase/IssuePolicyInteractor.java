@@ -3,8 +3,8 @@ package org.prueba.petinsuranceservice.application.usecase;
 import lombok.RequiredArgsConstructor;
 import org.prueba.petinsuranceservice.domain.exception.DomainException;
 import org.prueba.petinsuranceservice.domain.model.Policy;
-import org.prueba.petinsuranceservice.domain.model.PolicyStatus;
-import org.prueba.petinsuranceservice.domain.model.event.PolicyIssuedEvent;
+import org.prueba.petinsuranceservice.domain.model.PolicyFactory;
+import org.prueba.petinsuranceservice.domain.model.Quote;
 import org.prueba.petinsuranceservice.domain.port.in.IssuePolicyUseCase;
 import org.prueba.petinsuranceservice.domain.port.out.DomainEventPublisher;
 import org.prueba.petinsuranceservice.domain.port.out.PolicyRepository;
@@ -28,49 +28,27 @@ public class IssuePolicyInteractor implements IssuePolicyUseCase {
     @Transactional
     public Mono<Policy> execute(UUID quoteId, String ownerName, String ownerId, String ownerEmail) {
         return quoteRepository.findById(quoteId)
-                .switchIfEmpty(Mono.error(new DomainException("Quote not found with ID: " + quoteId)))
-                .flatMap(quote -> {
-                    validateOwnerData(ownerName, ownerId, ownerEmail);
-
-                    if (quote.expirationDate().isBefore(LocalDateTime.now())) {
-                        return Mono.error(new DomainException("Quote has expired. Please generate a new one."));
-                    }
-
-                    Policy policy = Policy.builder()
-                            .id(UUID.randomUUID())
-                            .quoteId(quoteId)
-                            .ownerName(ownerName)
-                            .ownerId(ownerId)
-                            .ownerEmail(ownerEmail)
-                            .status(PolicyStatus.ACTIVE)
-                            .issueDate(LocalDateTime.now())
-                            .build();
-
-                    return policyRepository.save(policy)
-                            .flatMap(savedPolicy -> {
-                                PolicyIssuedEvent event = PolicyIssuedEvent.builder()
-                                        .policyId(savedPolicy.id())
-                                        .quoteId(quoteId)
-                                        .amount(quote.amount())
-                                        .ownerEmail(ownerEmail)
-                                        .occurredAt(LocalDateTime.now())
-                                        .build();
-
-                                return eventPublisher.publishPolicyIssued(event)
-                                        .thenReturn(savedPolicy);
-                            });
-                });
+                .switchIfEmpty(Mono.error(new DomainException("Quote not found: " + quoteId)))
+                .flatMap(quote -> processIssuance(quote, ownerName, ownerId, ownerEmail));
     }
 
-    private void validateOwnerData(String name, String id, String email) {
-        if (name == null || name.isBlank()) {
-            throw new DomainException("Owner name is required.");
+    private Mono<Policy> processIssuance(Quote quote, String name, String id, String email) {
+        checkExpiration(quote);
+
+        Policy policy = PolicyFactory.createActivePolicy(quote, name, id, email);
+
+        return policyRepository.save(policy)
+                .flatMap(savedPolicy -> publishEvent(savedPolicy, quote));
+    }
+
+    private void checkExpiration(Quote quote) {
+        if (quote.expirationDate().isBefore(LocalDateTime.now())) {
+            throw new DomainException("Quote has expired.");
         }
-        if (id == null || id.isBlank()) {
-            throw new DomainException("Owner ID is required.");
-        }
-        if (email == null || email.isBlank() || !email.contains("@")) {
-            throw new DomainException("A valid owner email is required.");
-        }
+    }
+
+    private Mono<Policy> publishEvent(Policy policy, Quote quote) {
+        return eventPublisher.publishPolicyIssued(PolicyFactory.createIssuedEvent(policy, quote))
+                .thenReturn(policy);
     }
 }
